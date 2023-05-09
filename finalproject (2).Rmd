@@ -1,0 +1,293 @@
+---
+title: "project_final_632"
+author: "Sagar Soneji fx9706"
+date: "2023-04-25"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(car)
+library(lmtest)
+library(gridExtra)
+library(MASS)
+library(randomForest)
+library(rpart)
+
+
+
+project <- read.csv('/Users/sagarsoneji/Downloads/KAG_conversion_data.csv')
+str(project)
+
+project$xyz_campaign_id <- as.factor(project$xyz_campaign_id)
+head(project)
+
+project$age <- as.factor(project$age)
+project$gender <- as.factor(project$gender)
+project$interest <- as.factor(project$interest)
+head(project)
+```
+
+```{r}
+#bar plot of bar plot of approved conversion seperated by age and companies 
+ggplot(data = project, aes(xyz_campaign_id, Approved_Conversion, fill = age))+ geom_col(position = 'dodge' )+ xlab("Company ID") + ylab("Approved Conversion ")
+```
+```{r}
+#bar plot of bar plot of approved conversion seperated by gender and companies
+ggplot(data = project, aes(xyz_campaign_id, Approved_Conversion, fill = gender))+ geom_col(position = 'dodge') 
+```
+
+
+```{r}
+#by interests
+#bar plot of bar plot of approved conversion seperated by age and companies 
+ggplot(data = project, aes(xyz_campaign_id, Approved_Conversion, fill = interest))+ geom_col(position = 'dodge' )+ xlab("Company ID") + ylab("Approved Conversion ")
+```
+
+```{r}
+#plot of clicks vs approved conversions factored by Sex to see how many people actully bought the product 
+#creating subset of the dataset to compare variables better
+df_female <- subset(project, project$gender == 'F')
+df_male <- subset(project, project$gender == 'M')
+#plotting each of the factors one by one 
+p_male <- ggplot(data = df_male, aes(Clicks, Approved_Conversion))+ geom_point(col = "purple") + ylim(0,18)+ xlim(0,400) + labs(y = "Approved Conversions" , x = "Num of Clicks")+ ggtitle("Male")
+
+p_female <- ggplot(data= df_female , aes(Clicks, Approved_Conversion))+ geom_point(col = "red") + ylim(0,18) + xlim(0,400)+ labs(y = "Approved Conversions" , x = "Num of Clicks")+ ggtitle("Female")
+
+grid.arrange(p_male,p_female, ncol =2)
+```
+```{r}
+
+#plot of clicks vs approved conversions factored by age to see how mnay people actully bought the product 
+df_32 <- subset(project, project$age == '30-34')
+df_37 <- subset(project, project$age == '35-39')
+df_42 <- subset(project, project$age == '40-44')
+df_47 <- subset(project, project$age == '45-49')
+
+nrow(df_32)
+nrow(df_37)
+nrow(df_42)
+nrow(df_47)
+
+p_32 <- ggplot(data = df_32, aes(Clicks, Approved_Conversion))+ geom_point()+labs(title = 'Age 32', x = "Num of Clicks", y = "Approved Conversions")+ ylim(0,20) + xlim(0,400)
+
+p_37 <- ggplot(data = df_37, aes(Clicks, Approved_Conversion))+ geom_point()+labs(title = 'Age 37', x = "Num of Clicks", y = "Approved Conversions")+ ylim(0,20) + xlim(0,400)
+
+p_42 <- ggplot(data = df_42, aes(Clicks, Approved_Conversion))+ geom_point()+labs(title = 'Age 42', x = "Num of Clicks", y = "Approved Conversions")+ ylim(0,20) + xlim(0,400)
+
+p_47 <- ggplot(data = df_47, aes(Clicks, Approved_Conversion))+ geom_point()+labs(title = 'Age 47', x = "Num of Clicks", y = "Approved Conversions")+ ylim(0,20) + xlim(0,400)
+
+grid.arrange(p_32,p_37,p_42,p_47, ncol =2 , nrow = 2)
+```
+```{r}
+#plot of total conversion vs approved to see how many actually went from enquiring to buying 
+p_m <- ggplot(df_male , aes(Total_Conversion, Approved_Conversion)) + geom_point(col= "purple") + xlim(0,60) + ylim(0,20) + labs(title = 'Male', x = "Total conversions", y = "Approved Conversions")
+
+p_f <- ggplot(df_female , aes(Total_Conversion, Approved_Conversion)) + geom_point(col= "red") + xlim(0,60) + ylim(0,20) + labs(title = 'Female', x = "Total conversions", y = "Approved Conversions")
+
+grid.arrange(p_m,p_f, ncol =2)
+```
+```{r}
+
+##plot of total conversion vs approved to see how many actually went from enquiring to buying by age 
+buy_32 <- ggplot(data = df_32, aes(Total_Conversion, Approved_Conversion))+ geom_point()+labs(title = 'Age 32', x = "Total conversions", y = "Approved Conversions")+ xlim(0,60) + ylim(0,20)
+buy_37 <- ggplot(data = df_37, aes(Total_Conversion, Approved_Conversion))+ geom_point()+labs(title = 'Age 37', x = "Total conversions", y = "Approved Conversions")+ xlim(0,60) + ylim(0,20)
+buy_42 <- ggplot(data = df_42, aes(Total_Conversion, Approved_Conversion))+ geom_point()+labs(title = 'Age 42', x = "Total conversions", y = "Approved Conversions")+ xlim(0,60) + ylim(0,20)
+buy_47 <- ggplot(data = df_47, aes(Total_Conversion, Approved_Conversion))+ geom_point()+labs(title = 'Age 47', x = "Total conversions", y = "Approved Conversions")+ xlim(0,60) + ylim(0,20)
+
+grid.arrange(buy_32,buy_37,buy_42,buy_47,nrow =2,ncol=2)
+```
+We can see three is a point way far out in the age 
+```{r}
+project[526,]
+```
+```{r}
+# removing ad_id and fb_id
+project <- project[,-1]
+project <- project[,-2]
+
+#Lets create some additional parametrics that will help in better data interpretation 
+
+#Click-through-rate (CTR): This is the percentage of how many of our impressions became clicks
+
+project <- project %>%
+  mutate(CTR = ((Clicks / Impressions)*100))
+
+#cost per click : cpc : spent/click
+project <- project %>%
+  mutate(cpc = ((Spent / Clicks)))
+
+#replacing NA in cpc by 0 
+project <- project %>%
+  mutate(cpc = ifelse(is.na(cpc), 0 , cpc))
+
+#Creating ROAS  
+project <- project %>%
+  mutate(Conversion = Total_Conversion + Approved_Conversion,
+        Conversion_Val = Total_Conversion * 2,
+        Approved_ConVal = Approved_Conversion * 20) %>%
+  mutate(Grand_ConVal = Conversion_Val + Approved_ConVal) %>%
+  mutate(ROAS = round(Grand_ConVal / Spent, 2))
+
+project <- project %>%
+  mutate(ROAS = ifelse(is.na(ROAS), 0 , ROAS))
+
+#removing inf
+Project_good <- subset(project, project$Spent > 0)
+
+#Conversions / click
+Project_good <- Project_good %>%
+  mutate(conversion_percent = ((Approved_Conversion/Clicks)*100))
+
+#if conversion percent is greater than 10 we will consider the ad to be succesull for the sake od this study but this depneds on company to company and what the ad is trgeted toward.
+
+Project_good <- Project_good %>% 
+  mutate(Success = ifelse(conversion_percent > 2, 1 , 0))
+
+Project_good$Success <- factor(Project_good$Success, levels = c(0,1))
+
+table(Project_good$Success)
+
+
+
+head(Project_good)
+#remove variables that are npot needed 
+Project_good <- Project_good[,-12:-15]
+head(Project_good)
+```
+
+
+```{r}
+#Creating Test and train data 
+set.seed(99) 
+train_index <- sample(nrow(Project_good), 0.7 * nrow(Project_good))
+train_data <- Project_good[train_index, ]
+
+test_data <- Project_good[-train_index,]
+```
+
+```{r}
+p25 <- quantile(Project_good$cpc, probs = 0.25) 
+p75 <- quantile(Project_good$cpc, probs = 0.75)
+iqr <- IQR(Project_good$cpc)
+
+project_good <- project_good %>%
+  mutate(cpc = ifelse(cpc < p25 - 1.5*iqr))
+
+boxplot(log(Project_good$cpc))
+qqnorm(log(Project_good$cpc))
+qqline(log(Project_good$cpc))
+```
+
+```{r}
+model <- glm(Success ~ age + gender + interest + Clicks + CTR + cpc + ROAS   , data = train_data, family = "binomial")
+summary(model)
+
+model_1 <- glm(Success ~ age + gender+ cpc + ROAS   , data = train_data, family = "binomial")
+summary(model_1)
+AIC(model1)
+
+
+model_step <- step(model, trace = F)
+AIC(model_step)
+
+summary(model_step)
+
+
+plot(model_step)
+```
+```{r}
+library(ggplot2)
+library(plotly)
+
+
+# Create a new data frame with the predicted values
+n <- 50
+x1_new <- seq(min(train_data$cpc), max(train_data$cpc), length.out = n)
+x2_new <- seq(min(train_data$ROAS), max(train_data$ROAS), length.out = n)
+newdata <- expand.grid(cpc = x1_new, ROAS = x2_new)
+newdata$pred <- predict(model_step, newdata, type = "response")
+
+# Create a 3D scatter plot with predicted probabilities as colors
+fig <- plot_ly(newdata, x = ~cpc, y = ~ROAS, z = ~pred, 
+               type = "scatter3d", mode = "markers",
+               marker = list(color = ~pred, colorscale = "Viridis",
+                             cmin = 0, cmax = 1)) 
+
+# Set the axis labels and title
+fig <- fig %>% layout(scene = list(xaxis = list(title = "cpc"),
+                                   yaxis = list(title = "ROAS"),
+                                   zaxis = list(title = "Predicted Success")),
+                      title = "3D Plot of Logistic Regression with Predicted Success as Colors")
+fig
+
+```
+
+
+
+
+```{r}
+x1_grid <- seq(min(train_data$cpc), max(train_data$), length = 20)
+x2_grid <- seq(min(x2), max(x2), length = 20)
+grid <- expand.grid(x1 = x1_grid, x2 = x2_grid)
+```
+
+
+```{r}
+probs_test <- predict(model_step, newdata = test_data,type = "response")
+length(probs_test)
+preds_test <- rep(0, 281)
+preds_test[probs_test > 0.5] <- 1
+tb <- table(prediction = preds_test,
+actual = test_data$Success)
+addmargins((tb))
+prop.table(tb)
+```
+```{r}
+(186+67)/281
+#no of success corretly classified 
+sensitivity <- 67/73
+sensitivity 
+
+#specificity no of not success cortly classified 
+specificity <- 186/208
+specificity
+```
+```{r}
+library(randomForest)
+set.seed(99)
+rf_model <- randomForest(Success ~  cpc + ROAS , data = train_data, importance = T)
+
+rf_preds <- predict(rf_model , type = "response")
+tb <- table(actual = train_data$Success, predicted = rf_preds)
+addmargins(tb)
+
+plot(rf_model)
+```
+```{r}
+
+
+roc.curve <- roc(test_data$Success, probs_test)
+plot(roc.curve, main = "ROC Curve for Success", xlab = "False Positive Rate", ylab = "True Positive Rate")
+auc(roc.curve)
+```
+
+equation of logestic regression model 
+
+he fitted logistic regression model in terms of the logit 
+
+$$ = $$
+
+```{r}
+library(pROC)
+roc_obj <- roc(test_data$Success, probs_test)
+plot(1 - roc_obj$specificities, roc_obj$sensitivities, type="l",
+xlab = "1 - Specificity", ylab = "Sensitivity")
+# plot red point corresponding to 0.5 threshold:
+ points(x = 1-specificity, y = sensitivity, col="red", pch=19)
+ abline(0, 1, lty=2) # 1-1 line
+ 
+ auc(roc_obj)
+```
+
